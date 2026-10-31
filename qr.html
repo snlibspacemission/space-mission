@@ -20,6 +20,8 @@
     .note { color: var(--soft); font-size: 14px; margin: 8px 0 0; }
     .warn { color: #b3261e; }
     .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+    .mbtn { display: inline-flex; align-items: center; justify-content: center; min-width: 56px; min-height: 40px; border-radius: 10px; border: 1px solid var(--line); text-decoration: none; color: var(--ink); background: #fff; font-family: "Jua", sans-serif; }
+    .mbtn:hover { border-color: var(--navy); }
     .qcard {
       background: #fff; border: 3px solid var(--navy); border-radius: 18px; padding: 16px;
       text-align: center; break-inside: avoid; page-break-inside: avoid;
@@ -37,7 +39,9 @@
       .no-print { display: none !important; }
       .wrap { padding: 0; max-width: none; }
       .cards { grid-template-columns: repeat(2, 1fr); gap: 10mm; }
-      .qcard { height: 125mm; display: flex; flex-direction: column; justify-content: center; }
+      .mbtn { display: inline-flex; align-items: center; justify-content: center; min-width: 56px; min-height: 40px; border-radius: 10px; border: 1px solid var(--line); text-decoration: none; color: var(--ink); background: #fff; font-family: "Jua", sans-serif; }
+    .mbtn:hover { border-color: var(--navy); }
+    .qcard { height: 125mm; display: flex; flex-direction: column; justify-content: center; }
       .qcard .qr svg { width: 62mm; height: 62mm; }
       .qcard .test { display: none; }
       @page { size: A4; margin: 12mm; }
@@ -57,15 +61,20 @@
         </div>
         <p class="note" id="base-warn"></p>
       </div>
+      <div class="panel">
+        <b>월별 문제 미리보기</b>
+        <p class="note">누르면 그 달 문제로 미션이 열려요. 기록은 실제 운영과 따로 저장되고, 화면 위 '미리보기 끝내기'를 누르면 원래대로 돌아가요.</p>
+        <div class="row" id="months" style="margin-top:10px"></div>
+      </div>
     </div>
     <div class="cards" id="cards"></div>
   </div>
 
-  <script src="js/data.js"></script>
+  <script src="js/config.js"></script>
   <script src="js/vendor/qrcode.js"></script>
   <script>
     (function () {
-      var M = window.MISSION;
+      var M = window.MISSION_CONFIG;
       var input = document.getElementById("base");
       var warn = document.getElementById("base-warn");
 
@@ -89,7 +98,7 @@
           qr.make();
           return '<div class="qcard">' +
             '<div class="top"><span class="num">정거장 ' + (i + 1) + '</span><span class="icon">' + s.icon + '</span></div>' +
-            '<div class="ttl">' + esc(s.title) + '</div>' +
+            '<div class="ttl">' + esc(s.exhibit) + '</div>' +
             '<div class="qr">' + qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true }) + '</div>' +
             '<div class="cta">📱 찍고 미션 시작!</div>' +
             '<div class="url">' + esc(url) + '</div>' +
@@ -98,6 +107,9 @@
         }).join("");
       }
 
+      var mb = "";
+      for (var m = 1; m <= 12; m++) mb += '<a class="mbtn" target="_blank" href="index.html?set=' + m + '">' + m + "월</a>";
+      document.getElementById("months").innerHTML = mb;
       input.value = defaultBase();
       document.getElementById("apply").addEventListener("click", render);
       input.addEventListener("keydown", function (e) { if (e.key === "Enter") render(); });

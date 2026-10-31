@@ -94,6 +94,7 @@
           '<div class="planet">🪐</div>' +
           '<span class="eyebrow">' + esc(M.place) + "</span>" +
           "<h1>" + esc(M.title) + "</h1>" +
+          (M.theme ? '<p class="month">' + M.month + "월의 미션 · " + esc(M.theme) + "</p>" : "") +
           '<p class="muted">전시물 곳곳에 숨은 ' + total + "개의 정거장을 찾아<br>문제를 풀고 비밀 암호를 완성하세요!</p>" +
         "</div>" +
         '<div class="card stack">' +
@@ -101,7 +102,7 @@
           '<ol class="steps">' +
             "<li><b>1</b><span>전시물 옆 QR 코드를 찍어요</span></li>" +
             "<li><b>2</b><span>전시물을 살펴보고 문제를 풀어요</span></li>" +
-            "<li><b>3</b><span>맞히면 암호 조각을 하나 얻어요</span></li>" +
+            "<li><b>3</b><span>맞히면 암호 조각이나 ⭐ 별 에너지를 얻어요</span></li>" +
             "<li><b>4</b><span>" + total + "개를 모두 모으면 안내데스크에서 수료증을 받아요</span></li>" +
           "</ol>" +
         "</div>" +
@@ -142,6 +143,7 @@
       '<section class="stack">' +
         '<span class="eyebrow">대원 ' + esc(state.nick) + "</span>" +
         "<h2>" + (all ? "모든 조각을 모았어요!" : "미션 지도") + "</h2>" +
+        (M.theme ? '<p class="month" style="text-align:left">' + M.month + "월의 미션 · " + esc(M.theme) + "</p>" : "") +
         '<div class="card stack">' +
           '<div class="progress-head"><h3>통과한 정거장</h3><span class="muted">' + done + " / " + total + "</span></div>" +
           '<div class="bar"><i style="width:' + Math.round(done / total * 100) + '%"></i></div>' +
@@ -281,6 +283,12 @@
 
   /* ---------- 처음부터 다시 ---------- */
   document.getElementById("foot-place").textContent = M.place;
+  if (M.preview) {
+    var bar = document.createElement("div");
+    bar.className = "preview-bar";
+    bar.innerHTML = "👀 직원 미리보기 · " + M.month + '월 세트 <a href="?set=off">미리보기 끝내기</a>';
+    document.body.insertBefore(bar, document.body.firstChild);
+  }
   document.getElementById("reset-btn").addEventListener("click", function () {
     if (!confirm("모은 암호 조각이 모두 지워져요. 처음부터 다시 할까요?")) return;
     state = { nick: "", solved: {}, tries: {} };
