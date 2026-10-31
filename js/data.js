@@ -16,7 +16,7 @@ window.MISSION = {
   title: "우주탐사대원 훈련 미션",
   place: "중원어린이도서관 우주체험관",
   season: "2026-11",            // 운영 회차 표시 (바꾸면 기록 초기화)
-  secretWord: "꿈을향해우주로출발",  // 정거장 순서대로 한 글자씩
+  secretWord: "우주체험관",  // 정거장 순서대로 한 글자씩
   grades: { gold: 9, silver: 6 },   // 첫 시도에 맞힌 개수 기준
 
   stations: [
