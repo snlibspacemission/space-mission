@@ -37,14 +37,16 @@
     @media print {
       body { background: #fff; }
       .no-print { display: none !important; }
-      .wrap { padding: 0; max-width: none; }
+      .wrap { padding: 12mm; max-width: none; }
       .cards { grid-template-columns: repeat(2, 1fr); gap: 10mm; }
       .mbtn { display: inline-flex; align-items: center; justify-content: center; min-width: 56px; min-height: 40px; border-radius: 10px; border: 1px solid var(--line); text-decoration: none; color: var(--ink); background: #fff; font-family: "Jua", sans-serif; }
     .mbtn:hover { border-color: var(--navy); }
     .qcard { height: 125mm; display: flex; flex-direction: column; justify-content: center; }
       .qcard .qr svg { width: 62mm; height: 62mm; }
-      .qcard .test { display: none; }
-      @page { size: A4; margin: 12mm; }
+      .qcard .test, .qcard .url { display: none; }
+      /* 여백을 0으로 두면 브라우저가 위아래에 페이지 주소·날짜를 넣지 않아요.
+         대신 위 .wrap의 안쪽 여백(12mm)으로 종이 가장자리를 띄웁니다. */
+      @page { size: A4; margin: 0; }
     }
   </style>
 </head>
@@ -101,7 +103,7 @@
             '<div class="ttl">' + esc(s.exhibit) + '</div>' +
             '<div class="qr">' + qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true }) + '</div>' +
             '<div class="cta">📱 찍고 미션 시작!</div>' +
-            /*'<div class="url">' + esc(url) + '</div>' +*/
+            '<div class="url">' + esc(url) + '</div>' +
             '<a class="test no-print" href="' + esc(url) + '" target="_blank">이 정거장 열어 보기 →</a>' +
           '</div>';
         }).join("");
