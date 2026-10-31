@@ -8,9 +8,29 @@
   var total = stations.length;
   var letters = Array.from(M.secretWord);
 
-  if (letters.length !== total) {
-    console.warn("[미션] secretWord 글자 수(" + letters.length + ")와 정거장 수(" + total + ")가 다릅니다.");
+  /* 암호 글자를 정거장에 자동 배분
+     · 글자 수 = 정거장 수 → 정거장마다 한 글자
+     · 글자 수 < 정거장 수 → 고르게 띄엄띄엄 (예: 3글자/9곳 → 3·6·9번 정거장)
+       나머지 정거장은 ⭐ 별 에너지
+     · 글자 수 > 정거장 수 → 한 정거장이 두 글자 이상
+     · data.js의 정거장에 piece: "글자"를 직접 적으면 그 설정이 우선 */
+  var pieces = stations.map(function () { return ""; });
+  var letterAt = [];   // 각 글자가 몇 번째 정거장에서 나오는지
+  var manual = stations.some(function (s) { return typeof s.piece === "string"; });
+  if (manual) {
+    letters = [];
+    stations.forEach(function (s, i) {
+      pieces[i] = s.piece || "";
+      Array.from(pieces[i]).forEach(function (ch) { letters.push(ch); letterAt.push(i); });
+    });
+  } else {
+    letters.forEach(function (ch, j) {
+      var k = Math.ceil((j + 1) * total / letters.length) - 1;
+      pieces[k] += ch;
+      letterAt.push(k);
+    });
   }
+  var STAR = "⭐";
 
   /* ---------- 저장 (브라우저에만 저장, 서버 없음) ---------- */
   var memory = null; // 저장소를 못 쓰는 환경에서는 화면이 켜져 있는 동안만 기억
@@ -60,7 +80,7 @@
   function top() { window.scrollTo(0, 0); }
   function wordHtml() {
     return '<div class="word" aria-label="비밀 암호">' + letters.map(function (ch, i) {
-      var on = state.solved[stations[i] && stations[i].code];
+      var on = state.solved[stations[letterAt[i]].code];
       return '<span class="' + (on ? "on" : "") + '">' + (on ? esc(ch) : "?") + "</span>";
     }).join("") + "</div>";
   }
@@ -112,7 +132,7 @@
       var ok = state.solved[s.code];
       return '<div class="slot' + (ok ? " done" : "") + '">' +
         '<span class="ic">' + s.icon + "</span>" +
-        (ok ? '<span class="piece">' + esc(letters[i] || "") + "</span>"
+        (ok ? '<span class="piece">' + esc(pieces[i] || STAR) + "</span>"
             : "<span>정거장 " + (i + 1) + "</span>") +
       "</div>";
     }).join("");
@@ -123,7 +143,7 @@
         '<span class="eyebrow">대원 ' + esc(state.nick) + "</span>" +
         "<h2>" + (all ? "모든 조각을 모았어요!" : "미션 지도") + "</h2>" +
         '<div class="card stack">' +
-          '<div class="progress-head"><h3>모은 암호 조각</h3><span class="muted">' + done + " / " + total + "</span></div>" +
+          '<div class="progress-head"><h3>통과한 정거장</h3><span class="muted">' + done + " / " + total + "</span></div>" +
           '<div class="bar"><i style="width:' + Math.round(done / total * 100) + '%"></i></div>' +
           wordHtml() +
         "</div>" +
@@ -209,8 +229,9 @@
     var done = solvedCount();
     var all = done >= total;
     return '<div class="card success stack">' +
-        '<div class="got">' + esc(letters[idx] || "★") + "</div>" +
-        "<h2>" + (revisit ? "이미 통과한 정거장이에요" : "정답이에요! 암호 조각 획득") + "</h2>" +
+        '<div class="got">' + esc(pieces[idx] || STAR) + "</div>" +
+        "<h2>" + (revisit ? "이미 통과한 정거장이에요" : (pieces[idx] ? "정답이에요! 암호 조각 획득" : "정답이에요! 별 에너지 충전")) + "</h2>" +
+        (pieces[idx] ? "" : '<p class="muted">이 정거장에는 암호 조각 대신 별 에너지가 있어요. 다른 정거장에서 조각을 찾아보세요!</p>') +
         '<p class="muted">정답: <b style="color:var(--mint)">' + esc(s.answer) + "</b></p>" +
         '<div class="explain"><b>🔍 알고 있나요?</b><br>' + esc(s.explain) + "</div>" +
         wordHtml() +
@@ -248,7 +269,7 @@
           '<p class="muted">첫 번째 도전에 맞힌 문제 ' + f + " / " + total + "</p>" +
           '<div class="staff-box stack">' +
             '<p class="muted" style="font-size:14px">안내데스크 선생님께 비밀 암호를 말해 주세요</p>' +
-            '<div class="big-word">' + esc(M.secretWord) + "</div>" +
+            '<div class="big-word">' + esc(letters.join("")) + "</div>" +
           "</div>" +
           '<p class="muted" style="font-size:14px">' + date + "</p>" +
         "</div>" +
