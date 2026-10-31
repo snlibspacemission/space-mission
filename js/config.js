@@ -9,10 +9,13 @@
          3      → 날짜와 상관없이 data3.js를 계속 사용
    ========================================================= */
 window.MISSION_CONFIG = {
-  title: "우주탐사대원 훈련 미션",
+  title: "우주 암호를 찾아라!",
   place: "중원어린이도서관 우주체험관",
   set: "auto",
   grades: { gold: 9, silver: 6 },   // 첫 시도에 맞힌 개수 기준
+
+  // 안내데스크 QR: 별명을 등록하고 전시실로 안내하는 출발용 QR (문제 없음)
+  desk: { code: "desk", icon: "🛰️", label: "안내데스크", title: "탐사대원 등록하고 출발!" },
 
   // 정거장 순서 = 월별 파일의 questions 순서
   stations: [

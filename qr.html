@@ -22,30 +22,37 @@
     .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
     .mbtn { display: inline-flex; align-items: center; justify-content: center; min-width: 56px; min-height: 40px; border-radius: 10px; border: 1px solid var(--line); text-decoration: none; color: var(--ink); background: #fff; font-family: "Jua", sans-serif; }
     .mbtn:hover { border-color: var(--navy); }
+    .sheet { display: contents; }
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .qcard {
       background: #fff; border: 3px solid var(--navy); border-radius: 18px; padding: 16px;
       text-align: center; break-inside: avoid; page-break-inside: avoid;
     }
     .qcard .top { display: flex; align-items: center; justify-content: center; gap: 8px; font-family: "Jua", sans-serif; font-size: 22px; }
+    .qcard.desk { border-color: var(--gold); border-width: 4px; background: #fffaf0; }
+    .qcard.desk .num { background: none; color: var(--navy); border: 2px solid var(--navy); }
+    .qcard .sub { font-size: 13px; color: var(--soft); margin-top: 2px; }
+    .links { list-style: none; }
+    .links b { font-family: "Jua", sans-serif; font-weight: 400; color: var(--navy); }
     .qcard .num { background: var(--gold); color: var(--navy); border-radius: 999px; padding: 2px 12px; }
     .qcard .icon { font-size: 30px; }
     .qcard .ttl { font-family: "Jua", sans-serif; font-size: 18px; margin: 6px 0 10px; min-height: 2.6em; }
     .qcard .qr svg { width: 200px; height: 200px; display: block; margin: 0 auto; }
     .qcard .cta { font-family: "Jua", sans-serif; font-size: 17px; margin-top: 8px; }
-    .qcard .url { font-size: 11px; color: var(--soft); word-break: break-all; margin-top: 4px; }
-    .qcard .test { font-size: 13px; margin-top: 6px; display: inline-block; }
+    .links { margin: 10px 0 0; padding-left: 0; font-size: 14px; display: grid; gap: 6px; }
+    .links a { color: var(--soft); word-break: break-all; font-size: 12px; }
     @media print {
       body { background: #fff; }
       .no-print { display: none !important; }
-      .wrap { padding: 12mm; max-width: none; }
-      .cards { grid-template-columns: repeat(2, 1fr); gap: 10mm; }
-      .mbtn { display: inline-flex; align-items: center; justify-content: center; min-width: 56px; min-height: 40px; border-radius: 10px; border: 1px solid var(--line); text-decoration: none; color: var(--ink); background: #fff; font-family: "Jua", sans-serif; }
-    .mbtn:hover { border-color: var(--navy); }
-    .qcard { height: 125mm; display: flex; flex-direction: column; justify-content: center; }
+      .wrap { padding: 0; max-width: none; }
+      .cards { display: block; }
+      /* 종이 한 장 = 카드 4장. 종이마다 안쪽 여백 12mm를 두어 2·3쪽도 잘리지 않아요. */
+      .sheet { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10mm; align-content: start;
+               height: 297mm; padding: 12mm; break-after: page; page-break-after: always; }
+      .sheet:last-child { break-after: auto; page-break-after: auto; }
+      .qcard { height: 125mm; display: flex; flex-direction: column; justify-content: center; }
       .qcard .qr svg { width: 62mm; height: 62mm; }
-      .qcard .test, .qcard .url { display: none; }
-      /* 여백을 0으로 두면 브라우저가 위아래에 페이지 주소·날짜를 넣지 않아요.
-         대신 위 .wrap의 안쪽 여백(12mm)으로 종이 가장자리를 띄웁니다. */
+      /* 여백을 0으로 두면 브라우저가 위아래에 페이지 주소·날짜를 넣지 않아요. */
       @page { size: A4; margin: 0; }
     }
   </style>
@@ -53,7 +60,7 @@
 <body>
   <div class="wrap">
     <div class="no-print">
-      <h1>정거장 QR 코드 인쇄 (직원용)</h1>
+      <h1>QR 코드 인쇄 (직원용) · 안내데스크 1 + 정거장 9</h1>
       <p class="note">아래 주소는 지금 열린 사이트 주소로 자동 채워져요. GitHub Pages에 올린 뒤 이 페이지를 열면 그대로 인쇄하면 됩니다.</p>
       <div class="panel">
         <div class="row">
@@ -62,6 +69,11 @@
           <button class="alt" onclick="window.print()">🖨 인쇄</button>
         </div>
         <p class="note" id="base-warn"></p>
+      </div>
+      <div class="panel">
+        <b>정거장 주소 확인 · 테스트</b>
+        <p class="note">이 목록은 화면에만 보이고 인쇄되지 않아요.</p>
+        <ul id="links" class="links"></ul>
       </div>
       <div class="panel">
         <b>월별 문제 미리보기</b>
@@ -93,19 +105,34 @@
           "⚠ 지금은 인터넷 주소(https://)가 아니에요. GitHub Pages 주소로 바꾼 뒤 인쇄해야 휴대폰에서 열립니다.";
         warn.className = "note" + (warn.textContent ? " warn" : "");
 
-        document.getElementById("cards").innerHTML = M.stations.map(function (s, i) {
-          var url = base + "?s=" + encodeURIComponent(s.code);
+        // 안내데스크 QR(출발용)을 맨 앞에, 그다음 전시실 정거장 9곳
+        var D = M.desk;
+        var items = [{ code: D.code, icon: D.icon, badge: D.label, title: D.title, cta: "📱 찍고 대원 등록하기", desk: true }]
+          .concat(M.stations.map(function (s, i) {
+            return { code: s.code, icon: s.icon, badge: "정거장 " + (i + 1), title: s.exhibit, cta: "📱 찍고 미션 시작!" };
+          }));
+
+        document.getElementById("links").innerHTML = items.map(function (it) {
+          var url = base + "?s=" + encodeURIComponent(it.code);
+          return '<li><b>' + esc(it.badge) + '</b> ' + it.icon + ' ' + esc(it.title) + '<br><a href="' + esc(url) + '" target="_blank">' + esc(url) + '</a></li>';
+        }).join("");
+
+        var cardHtml = items.map(function (it) {
+          var url = base + "?s=" + encodeURIComponent(it.code);
           var qr = qrcode(0, "M");
           qr.addData(url);
           qr.make();
-          return '<div class="qcard">' +
-            '<div class="top"><span class="num">정거장 ' + (i + 1) + '</span><span class="icon">' + s.icon + '</span></div>' +
-            '<div class="ttl">' + esc(s.exhibit) + '</div>' +
+          return '<div class="qcard' + (it.desk ? ' desk' : '') + '">' +
+            '<div class="top"><span class="num">' + esc(it.badge) + '</span><span class="icon">' + it.icon + '</span></div>' +
+            '<div class="ttl">' + esc(it.title) + '</div>' +
             '<div class="qr">' + qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true }) + '</div>' +
-            '<div class="cta">📱 찍고 미션 시작!</div>' +
-            '<a class="test no-print" href="' + esc(url) + '" target="_blank">이 정거장 열어 보기 →</a>' +
+            '<div class="cta">' + it.cta + '</div>' +
+            (it.desk ? '<div class="sub">별명을 정한 뒤 전시실로 들어가요</div>' : '') +
           '</div>';
-        }).join("");
+        });
+        var sheets = "";
+        for (var k = 0; k < cardHtml.length; k += 4) sheets += '<div class="sheet">' + cardHtml.slice(k, k + 4).join("") + '</div>';
+        document.getElementById("cards").innerHTML = sheets;
       }
 
       var mb = "";

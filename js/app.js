@@ -31,6 +31,7 @@
     });
   }
   var STAR = "⭐";
+  var DESK = (M.desk && M.desk.code) || "desk";   // 안내데스크 QR 코드
 
   /* ---------- 저장 (브라우저에만 저장, 서버 없음) ---------- */
   var memory = null; // 저장소를 못 쓰는 환경에서는 화면이 켜져 있는 동안만 기억
@@ -120,8 +121,57 @@
       if (!v) { document.getElementById("nick").focus(); return; }
       state.nick = v.slice(0, 10);
       save(state);
-      if (nextCode) viewStation(byCode(nextCode)); else viewMap();
+      if (nextCode === DESK) viewWelcome();
+      else if (nextCode) viewStation(byCode(nextCode));
+      else viewMap();
     });
+    top();
+  }
+
+  /* ---------- 화면: 출발 안내 (안내데스크 QR) ---------- */
+  function viewWelcome() {
+    setUrl("");
+    var done = solvedCount();
+    var all = done >= total;
+    var list = stations.map(function (s, i) {
+      var ok = state.solved[s.code];
+      return '<li class="go-item' + (ok ? " ok" : "") + '">' +
+        '<span class="go-ic">' + s.icon + "</span>" +
+        '<span class="go-tx"><b>정거장 ' + (i + 1) + "</b> " + esc(s.exhibit) + '<br><small>' + esc(s.zone) + "</small></span>" +
+        '<span class="go-ck">' + (ok ? "✓" : "") + "</span>" +
+      "</li>";
+    }).join("");
+
+    app.innerHTML =
+      '<section class="stack">' +
+        '<div class="hero stack" style="padding-top:6px">' +
+          '<div class="planet">🛰️</div>' +
+          '<span class="eyebrow">대원 ' + esc(state.nick) + "</span>" +
+          "<h1>" + (all ? "모든 정거장을 통과했어요!" : done ? "다시 만나서 반가워요!" : "탐사 준비 완료!") + "</h1>" +
+          (M.theme ? '<p class="month">' + M.month + "월의 미션 · " + esc(M.theme) + "</p>" : "") +
+        "</div>" +
+        (all ? "" :
+        '<div class="card stack">' +
+          "<h3>🚪 이제 전시실로 들어가요</h3>" +
+          '<ol class="steps">' +
+            "<li><b>1</b><span>우주체험관 전시실로 이동해요</span></li>" +
+            "<li><b>2</b><span>전시물 옆 <b style=\"all:unset;color:var(--gold)\">노란 QR 카드</b>를 찾아 찍어요</span></li>" +
+            "<li><b>3</b><span>" + total + "개 정거장은 어느 곳부터 가도 괜찮아요</span></li>" +
+            "<li><b>4</b><span>암호를 다 모으면 이곳 안내데스크로 돌아와요</span></li>" +
+          "</ol>" +
+        "</div>") +
+        '<div class="card stack">' +
+          '<div class="progress-head"><h3>찾아야 할 정거장</h3><span class="muted">' + done + " / " + total + "</span></div>" +
+          '<ul class="go-list">' + list + "</ul>" +
+        "</div>" +
+        '<p class="muted center" style="font-size:14px">같은 휴대폰으로 끝까지 참여해야 기록이 이어져요.</p>' +
+        (all ? '<button class="btn" id="go-cert">🏅 수료증 받기</button>' : "") +
+        '<button class="btn' + (all ? " ghost" : "") + '" id="to-map">미션 지도 보기</button>' +
+      "</section>";
+
+    var c = document.getElementById("go-cert");
+    if (c) c.addEventListener("click", viewCert);
+    document.getElementById("to-map").addEventListener("click", function () { viewMap(); });
     top();
   }
 
@@ -237,7 +287,7 @@
         '<p class="muted">정답: <b style="color:var(--mint)">' + esc(s.answer) + "</b></p>" +
         '<div class="explain"><b>🔍 알고 있나요?</b><br>' + esc(s.explain) + "</div>" +
         wordHtml() +
-        '<p class="muted">' + (all ? "모든 조각을 모았어요!" : "모은 조각 " + done + " / " + total) + "</p>" +
+        '<p class="muted">' + (all ? "모든 조각을 모았어요!" : "통과한 정거장 " + done + " / " + total) + "</p>" +
       "</div>" +
       (all ? '<button class="btn" id="go-cert">🏅 수료증 받기</button>' : "") +
       '<button class="btn ' + (all ? "ghost" : "") + '" id="to-map">' + (all ? "미션 지도 보기" : "다음 정거장 찾으러 가기") + "</button>";
@@ -302,7 +352,8 @@
   try { code = new URLSearchParams(location.search).get("s") || ""; } catch (e) {}
   var idx = code ? byCode(code) : -1;
 
-  if (!state.nick) viewStart(idx >= 0 ? code : "");
+  if (code === DESK) { if (!state.nick) viewStart(DESK); else viewWelcome(); }
+  else if (!state.nick) viewStart(idx >= 0 ? code : "");
   else if (idx >= 0) viewStation(idx);
   else viewMap();
 })();

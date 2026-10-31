@@ -41,6 +41,7 @@
       title: C.title,
       place: C.place,
       grades: C.grades,
+      desk: C.desk,
       month: n,
       theme: S.theme || "",
       secretWord: S.secretWord,
