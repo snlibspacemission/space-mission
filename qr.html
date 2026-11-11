@@ -41,6 +41,8 @@
     .qcard .cta { font-family: "Jua", sans-serif; font-size: 17px; margin-top: 8px; }
     .links { margin: 10px 0 0; padding-left: 0; font-size: 14px; display: grid; gap: 6px; }
     .links a { color: var(--soft); word-break: break-all; font-size: 12px; }
+    .qcard .dl { margin-top: 10px; min-height: 40px; font-size: 15px; }
+    #dl-all[disabled] { opacity: .6; cursor: default; }
     @media print {
       body { background: #fff; }
       .no-print { display: none !important; }
@@ -67,7 +69,9 @@
           <input id="base" type="text" aria-label="사이트 주소">
           <button id="apply">QR 다시 만들기</button>
           <button class="alt" onclick="window.print()">🖨 인쇄</button>
+          <button class="alt" id="dl-all">⬇ 10장 모두 JPG로 받기</button>
         </div>
+        <p class="note">카드 아래 'JPG 저장' 버튼으로 한 장씩 받을 수도 있어요. 모두 받기를 누르면 브라우저가 '여러 파일 다운로드 허용'을 물을 수 있으니 허용을 눌러 주세요.</p>
         <p class="note" id="base-warn"></p>
       </div>
       <div class="panel">
@@ -98,8 +102,115 @@
       }
       function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
 
+      var items = [], base = "";
+
+      /* ---------- JPG 만들기: 카드를 캔버스에 직접 그려요 (약 9 × 12.7cm, 300dpi) ---------- */
+      var W = 1063, H = 1500;
+      function rr(ctx, x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+      }
+      function wrap(ctx, text, maxW) {
+        var words = String(text).split(" "), lines = [], line = "";
+        words.forEach(function (w) {
+          var t = line ? line + " " + w : w;
+          if (ctx.measureText(t).width <= maxW) { line = t; return; }
+          if (line) lines.push(line);
+          line = w;
+          while (ctx.measureText(line).width > maxW) {           // 아주 긴 낱말은 글자 단위로 자름
+            var k = line.length; while (k > 1 && ctx.measureText(line.slice(0, k)).width > maxW) k--;
+            lines.push(line.slice(0, k)); line = line.slice(k);
+          }
+        });
+        if (line) lines.push(line);
+        return lines;
+      }
+      function drawCard(it) {
+        var url = base + "?s=" + encodeURIComponent(it.code);
+        var c = document.createElement("canvas"); c.width = W; c.height = H;
+        var ctx = c.getContext("2d");
+        var NAVY = "#0b1026", GOLD = "#f2b530", SOFT = "#5b6385";
+        // 글자는 한글 글꼴로만 그리고(띄어쓰기 폭이 일정), 이모지는 따로 그려요.
+        var KR = ', "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif';
+        var EMOJI = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+        ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
+        // 테두리
+        var bw = it.desk ? 18 : 14;
+        rr(ctx, 30, 30, W - 60, H - 60, 60);
+        ctx.fillStyle = it.desk ? "#fffaf0" : "#ffffff"; ctx.fill();
+        ctx.lineWidth = bw; ctx.strokeStyle = it.desk ? GOLD : NAVY; ctx.stroke();
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        // 배지 + 아이콘
+        ctx.font = '76px "Jua"' + KR;
+        var bt = it.badge, bwid = ctx.measureText(bt).width + 70, ic = 100, gap = 26;
+        var total = bwid + gap + ic, bx = (W - total) / 2, by = 120, bh = 112;
+        rr(ctx, bx, by, bwid, bh, bh / 2);
+        if (it.desk) { ctx.lineWidth = 7; ctx.strokeStyle = NAVY; ctx.stroke(); }
+        else { ctx.fillStyle = GOLD; ctx.fill(); }
+        ctx.fillStyle = NAVY; ctx.fillText(bt, bx + bwid / 2, by + bh / 2 + 4);
+        ctx.font = '96px ' + EMOJI;
+        ctx.fillText(it.icon, bx + bwid + gap + ic / 2, by + bh / 2 + 4);
+        // 제목 (최대 2줄)
+        ctx.font = '64px "Jua"' + KR; ctx.fillStyle = NAVY;
+        var lines = wrap(ctx, it.title, W - 200).slice(0, 2);
+        var ty = lines.length === 1 ? 335 : 300;
+        lines.forEach(function (ln, i) { ctx.fillText(ln, W / 2, ty + i * 78); });
+        // QR
+        var qr = qrcode(0, "M"); qr.addData(url); qr.make();
+        var n = qr.getModuleCount(), size = 680, cell = size / (n + 4), qx = (W - size) / 2, qy = 430;
+        ctx.fillStyle = "#ffffff"; ctx.fillRect(qx, qy, size, size);
+        ctx.fillStyle = "#000000";
+        for (var r = 0; r < n; r++) for (var col = 0; col < n; col++) {
+          if (qr.isDark(r, col)) ctx.fillRect(Math.floor(qx + (col + 2) * cell), Math.floor(qy + (r + 2) * cell), Math.ceil(cell), Math.ceil(cell));
+        }
+        // 안내 문구
+        // "📱 찍고 …": 이모지와 글자를 나눠서 가운데 정렬
+        var cy = it.desk ? 1235 : 1260, ctaText = it.cta.replace(/^📱\s*/, "");
+        ctx.font = '66px "Jua"' + KR; var tw = ctx.measureText(ctaText).width;
+        var ew = 80, gx = (W - (ew + 20 + tw)) / 2;
+        ctx.textAlign = "left"; ctx.fillStyle = NAVY;
+        ctx.font = '64px ' + EMOJI; ctx.fillText("📱", gx, cy);
+        ctx.font = '66px "Jua"' + KR; ctx.fillText(ctaText, gx + ew + 20, cy);
+        ctx.textAlign = "center";
+        if (it.desk) { ctx.fillStyle = SOFT; ctx.font = '44px "Gowun Dodum"' + KR; ctx.fillText("별명을 정한 뒤 전시실로 들어가요", W / 2, 1325); }
+        return c;
+      }
+      function fileName(i) {
+        var n = String(i).padStart(2, "0");
+        return "QR_" + n + "_" + items[i].badge.replace(/\s+/g, "") + ".jpg";
+      }
+      function fontsReady() {
+        if (!document.fonts || !document.fonts.load) return Promise.resolve();
+        return Promise.all([document.fonts.load('64px "Jua"', "가"), document.fonts.load('44px "Gowun Dodum"', "가")]).catch(function () {});
+      }
+      function saveJpg(i) {
+        return fontsReady().then(function () {
+          return new Promise(function (done) {
+            drawCard(items[i]).toBlob(function (blob) {
+              var a = document.createElement("a");
+              a.href = URL.createObjectURL(blob); a.download = fileName(i);
+              document.body.appendChild(a); a.click(); a.remove();
+              setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+              done();
+            }, "image/jpeg", 0.95);
+          });
+        });
+      }
+      document.getElementById("dl-all").addEventListener("click", function () {
+        var btn = this, i = 0; btn.disabled = true;
+        (function next() {
+          if (i >= items.length) { btn.disabled = false; btn.textContent = "⬇ 10장 모두 JPG로 받기"; return; }
+          btn.textContent = "저장 중… " + (i + 1) + " / " + items.length;
+          saveJpg(i++).then(function () { setTimeout(next, 500); });
+        })();
+      });
+      document.getElementById("cards").addEventListener("click", function (e) {
+        var b = e.target.closest(".dl"); if (b) saveJpg(Number(b.getAttribute("data-i")));
+      });
+
       function render() {
-        var base = input.value.trim();
+        base = input.value.trim();
         if (base && !/\/$/.test(base)) base += "/";
         warn.textContent = /^https:\/\//.test(base) ? "" :
           "⚠ 지금은 인터넷 주소(https://)가 아니에요. GitHub Pages 주소로 바꾼 뒤 인쇄해야 휴대폰에서 열립니다.";
@@ -107,7 +218,7 @@
 
         // 안내데스크 QR(출발용)을 맨 앞에, 그다음 전시실 정거장 9곳
         var D = M.desk;
-        var items = [{ code: D.code, icon: D.icon, badge: D.label, title: D.title, cta: "📱 찍고 대원 등록하기", desk: true }]
+        items = [{ code: D.code, icon: D.icon, badge: D.label, title: D.title, cta: "📱 찍고 대원 등록하기", desk: true }]
           .concat(M.stations.map(function (s, i) {
             return { code: s.code, icon: s.icon, badge: "정거장 " + (i + 1), title: s.exhibit, cta: "📱 찍고 미션 시작!" };
           }));
@@ -117,7 +228,7 @@
           return '<li><b>' + esc(it.badge) + '</b> ' + it.icon + ' ' + esc(it.title) + '<br><a href="' + esc(url) + '" target="_blank">' + esc(url) + '</a></li>';
         }).join("");
 
-        var cardHtml = items.map(function (it) {
+        var cardHtml = items.map(function (it, i) {
           var url = base + "?s=" + encodeURIComponent(it.code);
           var qr = qrcode(0, "M");
           qr.addData(url);
@@ -128,6 +239,7 @@
             '<div class="qr">' + qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true }) + '</div>' +
             '<div class="cta">' + it.cta + '</div>' +
             (it.desk ? '<div class="sub">별명을 정한 뒤 전시실로 들어가요</div>' : '') +
+            '<button type="button" class="alt dl no-print" data-i="' + i + '">⬇ JPG 저장</button>' +
           '</div>';
         });
         var sheets = "";
