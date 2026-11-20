@@ -128,6 +128,122 @@
     top();
   }
 
+  /* ---------- 사이트 안에서 QR 찍기 ----------
+     카메라 앱으로 찍으면 새 탭이 열려, 아이폰 비공개 모드 등에서는 기록이 끊겨요.
+     이 화면 안에서 찍으면 같은 탭에서 이어지므로 기록이 유지됩니다. */
+  var scan = { el: null, stream: null, timer: 0, lastMsg: 0 };
+  function scanBtn(label, ghost) {
+    return '<button type="button" class="btn' + (ghost ? " ghost" : "") + '" data-scan>📷 ' + esc(label || "다음 정거장 QR 찍기") + "</button>";
+  }
+  function closeScanner() {
+    clearTimeout(scan.timer); scan.timer = 0;
+    if (scan.stream) { scan.stream.getTracks().forEach(function (t) { t.stop(); }); scan.stream = null; }
+    if (scan.el) { scan.el.remove(); scan.el = null; }
+    document.body.style.overflow = "";
+  }
+  function scanMsg(text, warn) {
+    if (!scan.el) return;
+    var m = scan.el.querySelector(".scan-msg");
+    if (m) { m.textContent = text; m.className = "scan-msg" + (warn ? " warn" : ""); }
+  }
+  function scanFail(name) {
+    if (scan.stream) { scan.stream.getTracks().forEach(function (t) { t.stop(); }); scan.stream = null; }
+    clearTimeout(scan.timer);
+    if (!scan.el) return;
+    var denied = name === "NotAllowedError" || name === "SecurityError" || name === "PermissionDeniedError";
+    var title, body, how = "";
+    if (denied) {
+      title = "카메라 권한이 꺼져 있어요";
+      body = "카메라를 허용하지 않으면 정거장 QR을 찍을 수 없어 미션을 진행할 수 없어요.";
+      how = '<div class="scan-how"><b>카메라를 허용하는 방법</b>' +
+        "<p><b>아이폰(사파리)</b> 주소창의 ‘가가’(aA) 버튼 → 웹사이트 설정 → 카메라 → 허용</p>" +
+        "<p><b>안드로이드(크롬)</b> 주소창 왼쪽 아이콘 → 권한 → 카메라 허용</p>" +
+        "<p>허용한 뒤 아래 ‘다시 시도’를 눌러 주세요.</p></div>";
+    } else if (name === "NotFoundError" || name === "OverconstrainedError" || name === "DevicesNotFoundError") {
+      title = "카메라를 찾을 수 없어요";
+      body = "카메라가 없는 기기에서는 정거장 QR을 찍을 수 없어 미션을 진행할 수 없어요.";
+    } else if (name === "NotReadableError" || name === "TrackStartError") {
+      title = "카메라를 열 수 없어요";
+      body = "다른 앱이 카메라를 쓰고 있어요. 카메라를 쓰는 앱을 닫고 다시 시도해 주세요. 카메라 없이는 미션을 진행할 수 없어요.";
+    } else {
+      title = "이 브라우저에서는 카메라를 쓸 수 없어요";
+      body = "사파리나 크롬으로 이 페이지를 열어 주세요. 카메라 없이는 정거장 QR을 찍을 수 없어 미션을 진행할 수 없어요.";
+    }
+    scan.el.querySelector(".scan-body").innerHTML =
+      '<div class="scan-fail stack">' +
+        '<div class="scan-fail-ic" aria-hidden="true">📵</div>' +
+        "<h2>" + title + "</h2>" +
+        "<p>" + body + "</p>" + how +
+        '<p class="muted" style="font-size:14px">도움이 필요하면 안내데스크 선생님께 말해 주세요.</p>' +
+        '<button type="button" class="btn" data-scan-retry>다시 시도</button>' +
+        '<button type="button" class="btn ghost" data-scan-close>닫기</button>' +
+      "</div>";
+  }
+  function handleCode(text) {
+    var c = "";
+    try { c = new URL(text, location.href).searchParams.get("s") || ""; } catch (e) {}
+    if (!c) c = String(text || "").trim();
+    if (c === DESK) { closeScanner(); viewWelcome(); return true; }
+    var i = byCode(c);
+    if (i >= 0) {
+      if (navigator.vibrate) { try { navigator.vibrate(60); } catch (e) {} }
+      closeScanner(); viewStation(i); return true;
+    }
+    var now = Date.now();
+    if (now - scan.lastMsg > 2500) { scan.lastMsg = now; scanMsg("우주체험관 정거장 QR이 아니에요. 노란 QR 카드를 찍어 주세요.", true); }
+    return false;
+  }
+  function scanLoop(video, canvas) {
+    if (!scan.el) return;
+    if (video.readyState >= 2 && video.videoWidth) {
+      var k = Math.min(1, 720 / video.videoWidth);
+      var w = Math.round(video.videoWidth * k), h = Math.round(video.videoHeight * k);
+      canvas.width = w; canvas.height = h;
+      var ctx = canvas.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(video, 0, 0, w, h);
+      var img = ctx.getImageData(0, 0, w, h);
+      var found = window.jsQR ? window.jsQR(img.data, w, h, { inversionAttempts: "dontInvert" }) : null;
+      if (found && found.data && handleCode(found.data)) return;
+    }
+    scan.timer = setTimeout(function () { scanLoop(video, canvas); }, 150);
+  }
+  function openScanner() {
+    closeScanner();
+    var el = document.createElement("div");
+    el.className = "scan";
+    el.setAttribute("role", "dialog");
+    el.setAttribute("aria-modal", "true");
+    el.setAttribute("aria-label", "정거장 QR 찍기");
+    el.innerHTML =
+      '<div class="scan-top"><b>정거장 QR 찍기</b><button type="button" class="scan-x" data-scan-close aria-label="닫기">✕</button></div>' +
+      '<div class="scan-body">' +
+        '<div class="scan-view"><video playsinline muted autoplay></video><div class="scan-frame" aria-hidden="true"></div></div>' +
+        '<p class="scan-msg">카메라 권한을 물으면 ‘허용’을 눌러 주세요.</p>' +
+      "</div>";
+    document.body.appendChild(el);
+    document.body.style.overflow = "hidden";
+    scan.el = el;
+    var md = navigator.mediaDevices;
+    if (!window.isSecureContext || !md || !md.getUserMedia) { scanFail("Unsupported"); return; }
+    md.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false }).then(function (stream) {
+      if (!scan.el) { stream.getTracks().forEach(function (t) { t.stop(); }); return; }
+      scan.stream = stream;
+      var v = el.querySelector("video");
+      v.setAttribute("playsinline", ""); v.muted = true; v.srcObject = stream;
+      var p = v.play(); if (p && p.catch) p.catch(function () {});
+      scanMsg("노란 QR 카드를 네모 안에 맞춰 주세요.");
+      scanLoop(v, document.createElement("canvas"));
+    }).catch(function (err) { scanFail(err && err.name); });
+  }
+  document.addEventListener("click", function (e) {
+    var t = e.target.closest ? e.target : null;
+    if (!t) return;
+    if (t.closest("[data-scan]")) openScanner();
+    else if (t.closest("[data-scan-retry]")) openScanner();
+    else if (t.closest("[data-scan-close]")) closeScanner();
+  });
+  document.addEventListener("visibilitychange", function () { if (document.hidden && scan.stream) closeScanner(); });
+
   /* ---------- 화면: 출발 안내 (안내데스크 QR) ---------- */
   function viewWelcome() {
     setUrl("");
@@ -155,7 +271,7 @@
           "<h3>🚪 이제 전시실로 들어가요</h3>" +
           '<ol class="steps">' +
             "<li><b>1</b><span>우주체험관 전시실로 이동해요</span></li>" +
-            "<li><b>2</b><span>전시물 옆 <b style=\"all:unset;color:var(--gold)\">노란 QR 카드</b>를 찾아 찍어요</span></li>" +
+            "<li><b>2</b><span>전시물 옆 <b style=\"all:unset;color:var(--gold)\">노란 QR 카드</b>를 아래 <b style=\"all:unset;color:var(--gold)\">📷 QR 찍기</b> 버튼으로 찍어요</span></li>" +
             "<li><b>3</b><span>" + total + "개 정거장은 어느 곳부터 가도 괜찮아요</span></li>" +
             "<li><b>4</b><span>암호를 다 모으면 이곳 안내데스크로 돌아와요</span></li>" +
           "</ol>" +
@@ -164,9 +280,9 @@
           '<div class="progress-head"><h3>찾아야 할 정거장</h3><span class="muted">' + done + " / " + total + "</span></div>" +
           '<ul class="go-list">' + list + "</ul>" +
         "</div>" +
-        '<p class="muted center" style="font-size:14px">같은 휴대폰으로 끝까지 참여해야 기록이 이어져요.</p>' +
-        (all ? '<button class="btn" id="go-cert">🏅 수료증 받기</button>' : "") +
-        '<button class="btn' + (all ? " ghost" : "") + '" id="to-map">미션 지도 보기</button>' +
+        '<p class="muted center" style="font-size:14px">휴대폰 카메라 앱 대신 이 화면의 버튼으로 찍어야 기록이 이어져요.</p>' +
+        (all ? '<button class="btn" id="go-cert">🏅 수료증 받기</button>' : scanBtn("첫 번째 정거장 QR 찍기")) +
+        '<button class="btn ghost" id="to-map">미션 지도 보기</button>' +
       "</section>";
 
     var c = document.getElementById("go-cert");
@@ -202,9 +318,9 @@
         '<div class="grid">' + slots + "</div>" +
         (all
           ? '<button class="btn" id="go-cert">🏅 수료증 받기</button>'
-          : '<div class="card center muted">' +
-              (done === 0 ? "전시물 옆 QR 코드를 찾아 찍어 보세요!" : "남은 정거장 " + (total - done) + "곳! 노란 QR 코드를 찾아 찍어 보세요.") +
-            "</div>") +
+          : '<p class="muted center">' +
+              (done === 0 ? "전시물 옆 노란 QR 카드를 찾아 아래 버튼으로 찍어 보세요!" : "남은 정거장 " + (total - done) + "곳! 노란 QR 카드를 찾아 찍어 보세요.") +
+            "</p>" + scanBtn(done === 0 ? "정거장 QR 찍기" : "다음 정거장 QR 찍기")) +
       "</section>";
 
     if (all) document.getElementById("go-cert").addEventListener("click", viewCert);
@@ -290,7 +406,8 @@
         '<p class="muted">' + (all ? "모든 조각을 모았어요!" : "통과한 정거장 " + done + " / " + total) + "</p>" +
       "</div>" +
       (all ? '<button class="btn" id="go-cert">🏅 수료증 받기</button>' : "") +
-      '<button class="btn ' + (all ? "ghost" : "") + '" id="to-map">' + (all ? "미션 지도 보기" : "다음 정거장 찾으러 가기") + "</button>";
+      (all ? "" : scanBtn("다음 정거장 QR 찍기")) +
+      '<button class="btn ghost" id="to-map">미션 지도 보기</button>';
   }
   function bindSuccess() {
     var c = document.getElementById("go-cert");
