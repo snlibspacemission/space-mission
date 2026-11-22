@@ -86,8 +86,35 @@
     }).join("") + "</div>";
   }
 
+  /* ---------- 이용 통계 (Umami) ----------
+     · GitHub Pages 주소(…github.io)에서만 기록하고, 직원 미리보기·내 컴퓨터 테스트는 빼요.
+     · 화면이 바뀔 때마다 '페이지 조회'로, 정거장 통과·완주·카메라 실패는 '이벤트'로 남겨요.
+     · 별명 등 개인정보는 보내지 않아요. */
+  var STAT_ON = !M.preview && /\.github\.io$/.test(location.hostname);
+  var statQueue = [], firstSearch = location.search, firstView = true;
+  function statSend(fn) {
+    if (!STAT_ON) return;
+    if (window.umami && window.umami.track) { try { fn(window.umami); } catch (e) {} }
+    else statQueue.push(fn);
+  }
+  (function flush(n) {                       // 통계 스크립트가 늦게 뜨면 잠시 모아 뒀다 보냄
+    if (!STAT_ON) return;
+    if (window.umami && window.umami.track) { statQueue.splice(0).forEach(function (fn) { try { fn(window.umami); } catch (e) {} }); return; }
+    if (n > 0) setTimeout(function () { flush(n - 1); }, 500);
+  })(40);
+  function statView(path, title) {
+    var url = path;
+    if (firstView && firstSearch) url += (path.indexOf("?") < 0 ? "?" : "&") + firstSearch.slice(1);  // 첫 접속의 ?s=desk, ?ref=… 유지
+    firstView = false;
+    statSend(function (u) { u.track(function (props) { props.url = url; props.title = title; return props; }); });
+  }
+  function statEvent(name, data) {
+    statSend(function (u) { u.track(name, data); });
+  }
+
   /* ---------- 화면: 시작 ---------- */
   function viewStart(nextCode) {
+    statView("/start", "시작(별명 입력)");
     setUrl(nextCode);
     app.innerHTML =
       '<section class="stack">' +
@@ -120,6 +147,7 @@
       var v = document.getElementById("nick").value.trim();
       if (!v) { document.getElementById("nick").focus(); return; }
       state.nick = v.slice(0, 10);
+      statEvent("대원 등록", { month: M.month });
       save(state);
       if (nextCode === DESK) viewWelcome();
       else if (nextCode) viewStation(byCode(nextCode));
@@ -147,6 +175,7 @@
     if (m) { m.textContent = text; m.className = "scan-msg" + (warn ? " warn" : ""); }
   }
   function scanFail(name) {
+    statEvent("카메라 사용 불가", { reason: String(name || "Unsupported") });
     if (scan.stream) { scan.stream.getTracks().forEach(function (t) { t.stop(); }); scan.stream = null; }
     clearTimeout(scan.timer);
     if (!scan.el) return;
@@ -246,6 +275,7 @@
 
   /* ---------- 화면: 출발 안내 (안내데스크 QR) ---------- */
   function viewWelcome() {
+    statView("/welcome", "출발 안내");
     setUrl("");
     var done = solvedCount();
     var all = done >= total;
@@ -293,6 +323,7 @@
 
   /* ---------- 화면: 미션 지도 ---------- */
   function viewMap(justGot) {
+    statView("/map", "미션 지도");
     setUrl("");
     var done = solvedCount();
     var slots = stations.map(function (s, i) {
@@ -330,6 +361,7 @@
   /* ---------- 화면: 정거장 문제 ---------- */
   function viewStation(idx) {
     var s = stations[idx];
+    statView("/station/" + (idx + 1), "정거장 " + (idx + 1) + " · " + s.exhibit);
     setUrl(s.code);
     var already = state.solved[s.code];
 
@@ -373,6 +405,7 @@
         if (v === s.answer) {
           b.classList.add("right");
           state.solved[s.code] = { first: tries === 1, at: Date.now() };
+          statEvent("정거장 통과", { station: idx + 1, month: M.month, firstTry: tries === 1, tries: tries });
           save(state);
           Array.prototype.forEach.call(app.querySelectorAll(".choice"), function (x) { x.disabled = true; });
           setTimeout(function () {
@@ -418,6 +451,11 @@
   /* ---------- 화면: 수료증 ---------- */
   function viewCert() {
     if (solvedCount() < total) { viewMap(); return; }
+    statView("/certificate", "수료증");
+    if (!state.completedSent) {
+      state.completedSent = true; save(state);
+      statEvent("미션 완주", { month: M.month, firstTryCount: firstTryCount() });
+    }
     setUrl("");
     var f = firstTryCount();
     var g = f >= M.grades.gold ? ["gold", "🥇", "골드 대원"]
